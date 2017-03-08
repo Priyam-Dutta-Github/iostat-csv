@@ -4,7 +4,7 @@
 
 # Settings
 COMMAND_OUTPUT=`iostat -t -x`
-PASTE_OFFSET=2
+CONCAT_LINE_OFFSET=3
 TITLE_LINE_OFFSET=6
 TITLE_LINE_HEADER="Date Time"
 
@@ -15,11 +15,10 @@ ${COMMAND_OUTPUT}
 EOF`
 
 # Calcurate how many lines to concatenate in each second
-PASTE_LINE_NUMBER=`expr ${COMMAND_OUTPUT_LINE_NUMBER} - ${PASTE_OFFSET}`
+CONCAT_LINE_NUMBER=`expr ${COMMAND_OUTPUT_LINE_NUMBER} - ${CONCAT_LINE_OFFSET}`
 
-# Print " -" for ${PASTE_LINE_NUBER} times to concatenate output lines by using paste command
-PASTE_LINE_HYPHENS=`seq -s' -' ${PASTE_LINE_NUMBER} | tr -d '[:digit:]'`
-
+# Print "N;" for ${CONCAT_LINE_NUBER} times to concatenate output lines by using sed command
+CONCAT_LINE_N=`seq -s'N;' ${CONCAT_LINE_NUMBER} | tr -d '[:digit:]'`
 
 # Generate title line for csv
 TITLE_AVG_CPU=`grep avg-cpu <<EOF
@@ -36,17 +35,21 @@ echo "${TITLE_LINE_HEADER} ${TITLE_AVG_CPU} ${TITLE_DEVICES}" \
 
 
 # Main part
-LANG=C; iostat -t -x 1 | tail -n +3 | grep -v -e avg-cpu -e Device \
- | paste ${PASTE_LINE_HYPHENS} | awk 'BEGIN {OFS=","} {$1=$1;print $0}'
+LANG=C; iostat -t -x 1 | grep --line-buffered -v -e avg-cpu -e Device -e Linux \
+ | sed --unbuffered "${CONCAT_LINE_N}s/\n/,/g;s/\s\s*/,/g;s/,,*/,/g;s/^,//g"
 
-# tail -n +3
-#  => Output after 3rd lines of the iostat output
-
-# grep -v -e avg-cpu -e avgqu-sz
+# grep -v -e avg-cpu -e Device -e Linux
 #  => Exclude title columns
 
-# paste ${PASTE_LINE_HYPHENS}
-#  => Concatenate output lines in each second to one line
+# sed --unbuffered
+#  '${CONCAT_LINE_N}s/\n/,/g'
+#    => Read ${CONCAT_LINE_NUMBER} lines and replace newline characters to ","
 
-# awk 'BEGIN {OFS=","} {$1=$1;print $0}'
-#  => Separate each value by comma
+#  's/\s\s*/,/g'
+#    => Replace adjacent blank symbols for ","
+
+#  's/,,*/,/g'
+#    => Replace adjacent commas for single comma
+
+#  's/^,//g'
+#    => Remove comma symbol placed at the beginning of the line
